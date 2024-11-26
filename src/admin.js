@@ -1,25 +1,26 @@
 import axios from 'axios';
 // C3.js
-let chart = c3.generate({
-  bindto: "#chart", // HTML 元素綁定
-  data: {
-    type: "pie",
-    columns: [
-      ["Louvre 雙人床架", 1],
-      ["Antony 雙人床架", 2],
-      ["Anty 雙人床架", 3],
-      ["其他", 4],
-    ],
-    colors: {
-      "Louvre 雙人床架": "#DACBFF",
-      "Antony 雙人床架": "#9D7FEA",
-      "Anty 雙人床架": "#5434A7",
-      其他: "#301E5F",
-    },
-  },
-});
+let chart = {}
+// let chart = c3.generate({
+//   bindto: "#chart", // HTML 元素綁定
+//   data: {
+//     type: "pie",
+//     columns: [
+//       ["Louvre 雙人床架", 1],
+//       ["Antony 雙人床架", 2],
+//       ["Anty 雙人床架", 3],
+//       ["其他", 4],
+//     ],
+//     colors: {
+//       "Louvre 雙人床架": "#DACBFF",
+//       "Antony 雙人床架": "#9D7FEA",
+//       "Anty 雙人床架": "#5434A7",
+//       其他: "#301E5F",
+//     },
+//   },
+// });
 
-let categoryCount = {};
+
 const orderList =
   document.querySelector(".orderPage-table").children[0].nextElementSibling;
 const deleteAllBtn = document.querySelector(".discardAllBtn");
@@ -35,20 +36,19 @@ let headers = {
   },
 };
 
-// 1. 取得所有訂單資料 ok
-// 2.渲染訂單資料 ok
-// 3.刪除單筆訂單 ok
-// 4.刪除所有訂單 ok
-// 5.（後台功能做圓餅圖，做全產品類別營收比重，類別含三項，共有：床架、收納、窗簾）
+// 修改
+// 刪除訂單後圖表也需要更改 ok
+// 目前缺少修改訂單狀態的功能，可再嘗試看看 ok
 
 function countCategory(orders) {
+  let categoryCount = {}
   orders.forEach((order) => {
     order.products.forEach((product) => {
       const { category, quantity } = product;
-      // console.log(category, quantity);
       categoryCount[category] = (categoryCount[category] || 0) + quantity;
     });
   });
+  return categoryCount;
 }
 
 function init() {
@@ -64,8 +64,7 @@ function getOrders() {
     .get(url, headers)
     .then((res) => {
       orders = res.data.orders;
-      countCategory(orders);
-      renderChart();
+      renderChart(orders);
       renderOrders(orders);
     })
     .catch((err) => {
@@ -73,6 +72,22 @@ function getOrders() {
     });
 }
 
+// 修改訂單狀態
+function updateOrder(orderId, status) {
+  let data = {
+    data: {
+      id: orderId,
+      paid: status
+    }
+  }
+  axios.put(url, data, headers)
+    .then((res) => {
+      renderOrders(res.data.orders)
+    })
+    .catch(err => {
+      console.log(err)
+    })
+}
 // 刪除單筆訂單
 function deleteOneOrder(orderId) {
   axios
@@ -80,6 +95,7 @@ function deleteOneOrder(orderId) {
     .then((res) => {
       if (res.data.status) {
         renderOrders(res.data.orders);
+        renderChart(res.data.orders);
       }
     })
     .catch((err) => {
@@ -92,9 +108,9 @@ function deleteAllOrders() {
   axios
     .delete(url, headers)
     .then((res) => {
-      // console.log(res.data.status);
       if (res.data.status) {
         renderOrders([]);
+        renderChart([])
       }
     })
     .catch((err) => {
@@ -113,7 +129,7 @@ function renderOrders(orders) {
         return (acc += `<p>${product.title}</p>`);
       }, "");
       str += `
-         <tr>
+         <tr data-id=${order.id}>
             <td>${order.id}</td>
             <td>
               <p>${order.user.name}</p>
@@ -126,11 +142,10 @@ function renderOrders(orders) {
             </td>
             <td>${formattedDate(order.createdAt)}</td>
             <td class="orderStatus">
-              <a href="#">${order.paid ? "已付款" : "未付款"}</a>
+              <a data-isPaid=${order.paid} href="#">${order.paid ? "已處理" : "未處理"}</a>
             </td>
             <td>
-              <input data-id=${order.id
-        } type="button" class="delSingleOrder-Btn" value="刪除" />
+              <input type="button" class="delSingleOrder-Btn" value="刪除" />
             </td>
           </tr>
         `;
@@ -148,7 +163,9 @@ function formattedDate(timestamp) {
   return formattedDate;
 }
 
-function renderChart() {
+function renderChart(orders) {
+  let categoryCount = countCategory(orders);
+
   let chatData = {
     bindto: "#chart", // HTML 元素綁定
     data: {
@@ -172,8 +189,18 @@ deleteAllBtn.addEventListener("click", (e) => {
 });
 
 orderList.addEventListener("click", (e) => {
+  e.preventDefault()
+  const orderId = e.target.parentElement.parentElement.getAttribute("data-id");
+
+  // 刪除單筆訂單
   if (e.target.getAttribute("class") === "delSingleOrder-Btn") {
-    const orderId = e.target.getAttribute("data-id");
     deleteOneOrder(orderId);
+    return
+  }
+
+  //修改訂單狀態
+  if (e.target.parentElement.getAttribute("class") === "orderStatus") {
+    const isPaid = JSON.parse(e.target.getAttribute("data-ispaid"))
+    updateOrder(orderId, !isPaid)
   }
 });
