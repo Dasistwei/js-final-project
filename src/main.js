@@ -4,24 +4,17 @@ const productList = document.querySelector(".productWrap");
 const productSelect = document.querySelector(".productSelect");
 const cart = document.querySelector(".shoppingCart-table");
 const orderForm = document.querySelector(".orderInfo-form");
+const orderFormBtn = document.querySelector(".orderInfo-btn");
 const errMessages = document.querySelectorAll(".orderInfo-message");
 let productDatas = [];
-
+let cartData = [];
 const url = import.meta.env.VITE_CLIENT_URL;
 let formData = {};
-
-//產品相關
-// - GET 取得產品列表 ok
-
-// 購物車相關
-// - GET 取得購物車內容 ok
-// - POST加入購物車 ok
-// - PATCH 修改購物車數量 ok
-// - DELETE 清空購物車 ok
-// - DELETE 刪除單一購物車 ok
-
-// 訂單相關
-// - POST 送出訂單 ok
+// fix
+// 可使用 alert 或其他彈出視窗讓使用者得知操作完成或失敗 ok
+// 若購物車沒商品，不可送出訂單，可在發出請求前先加入判斷，減少 API 請求次數 ok
+// 送出訂單後，可重新渲染購物車，目前送出後購物車狀態沒有刷新 ok
+// 可加入表單驗證：全部欄位必填、電話號碼八碼、信箱格式 ok
 
 function init() {
   getProducts();
@@ -50,6 +43,7 @@ function getCart() {
     .get(url + "/carts")
     .then((res) => {
       const { carts, finalTotal } = res.data;
+      cartData = carts;
       renderCart(carts, finalTotal);
     })
     .catch((err) => {
@@ -68,6 +62,7 @@ function addToCart(id) {
     .then((res) => {
       // console.log(res.data.carts);
       const { carts, finalTotal } = res.data;
+      cartData = carts;
       renderCart(carts, finalTotal);
     })
     .catch((err) => {
@@ -110,6 +105,7 @@ function removeOneFromCart(cartItemId) {
     })
     .then((res) => {
       const { carts, finalTotal } = res.data;
+      cartData = carts;
       renderCart(carts, finalTotal);
     })
     .catch((err) => {
@@ -122,6 +118,7 @@ function removeAllFromCart() {
     .delete(url + "/carts")
     .then((res) => {
       const { carts, finalTotal } = res.data;
+      cartData = carts;
       renderCart(carts, finalTotal);
     })
     .catch((err) => {
@@ -152,9 +149,14 @@ function createOrder() {
       }
     )
     .then((res) => {
-      console.log(res);
-      formData = {};
-      orderForm.reset();
+      if (res.status === 200) {
+        alert("訂購成功！");
+        getCart()
+        formData = {};
+        orderForm.reset();
+      } else {
+        alert("訂購失敗！");
+      }
     })
     .catch((err) => {
       console.log(err);
@@ -277,23 +279,69 @@ orderForm.addEventListener("change", (e) => {
   }
 });
 
-orderForm.addEventListener("click", (e) => {
-  e.preventDefault();
 
-  if (e.target.getAttribute("class") === "orderInfo-btn") {
-    let emptyCount = 0;
-    orderForm
-      .querySelectorAll(".orderInfo-inputWrap > input")
-      .forEach((input) => {
-        if (!input.value) {
-          input.nextElementSibling.style.display = "block";
-          emptyCount += 1;
-        } else {
-          input.nextElementSibling.style.display = "none";
-        }
-      });
-    if (emptyCount === 0) {
-      createOrder();
-    }
+function validateForm(data) {
+  // 可加入表單驗證：全部欄位必填、電話號碼八碼、信箱格式
+  let constraints = {
+    customerName: {
+      presence: { message: "必填" },
+    },
+    tradeWay: {
+      presence: { message: "必填" },
+    },
+    customerPhone: {
+      presence: { message: "必填" },
+      length: {
+        is: 8,
+        message: "電話必須為 8 碼"
+      },
+      format: {
+        pattern: "^[0-9]+$",
+        message: "請輸入正確的電話格式"
+      }
+    },
+    customerEmail: {
+      presence: { message: "必填" },
+      email: {
+        message: "email格式有誤"
+      }
+    },
+    customerAddress: {
+      presence: { message: "必填" },
+    },
+  };
+  return validate(data, constraints)
+}
+function showFormErrors(errors) {
+  orderForm
+    .querySelectorAll(".orderInfo-inputWrap > input")
+    .forEach((input) => {
+      if (errors[input.id]) {
+        let key = input.id.replace("customer", "").toLocaleLowerCase()
+        let error = errors[input.id][0].replace(`Customer ${key}`, "")
+        input.nextElementSibling.style.display = "block";
+        input.nextElementSibling.textContent = error
+      } else {
+        input.nextElementSibling.style.display = "none";
+      }
+    });
+}
+// 若購物車沒商品，不可送出訂單，可在發出請求前先加入判斷，減少 API 請求次數
+orderFormBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  // 若購物車沒商品，不可送出訂單
+  if (cartData.length === 0) {
+    alert("購物車無商品，無法送出訂單")
+    return;
+  }
+  const errors = validateForm(formData)
+
+  if (errors) {
+    showFormErrors(errors)
+  } else {
+    showFormErrors({})
+    createOrder();
   }
 });
+
+
